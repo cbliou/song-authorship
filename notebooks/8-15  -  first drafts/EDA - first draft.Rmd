@@ -53,7 +53,7 @@ final_df <- merge(x = max_week, y = df, by = c("Artists", "Name", "Weeks.on.char
 
 ```
 
-Our current dataframe is in not in a tidy format so we fix that (one word per row).
+Our current dataframe is in not in a tidy format so we fix that (one word per row). We also remove stop words.
 
 ```{r}
 reg <- "([^A-Za-z\\d#@']+|'[^A-Za-z\\d#@]+)"
@@ -75,6 +75,7 @@ write.csv(unique_df_words, file = "Weekly_data_tokenized_unique.csv")
 The log odds ratio for each word is calculated as
 
 $$\log_2\left(\frac{\frac{\text{# in robotic}}{\text{Total robotic}}}{\frac{\text{# in non-robotic}}{\text{Total non-robotic}}}\right)$$
+A higher log odds ratio means the word occurs in more robotic songs than non-robotoc songs.
 
 ```{r, fig.width = 8, fig.height = 9, echo = FALSE}
 num_words_to_filter = 5
@@ -96,7 +97,13 @@ rbind(ratios %>% top_n(30, logratio), ratios %>% top_n(-30, logratio)) %>%
 
 ```
 
+Key takeaways:
+
+- Not very informative, lots of outliers. Let's exclude this in the end.
+
 ## Sentiment Analysis
+
+For sentiments, we used the (NRC Emotion Lexicon)[https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm]. We run a Poisson test on each sentiment between robotic and non-robotic songs. The confidence intervals are plotted below:
 
 ```{r, echo = FALSE, fig.width = 8, fig.height = 6}
 nrc <- sentiments %>%
@@ -136,6 +143,12 @@ sentiment_diff %>%
     coord_flip()
 ```
 
+Key takeaways:
+
+In general, non-Robotic songs utilize less words with sentiments relating to joy, positivity, sadness, negativity, and fear than robotic songs. 
+
+Let's explore which words have the most positive log odds ratio (used in Robotic songs more often than non-robotic) by sentiment:
+
 ```{r, echo = FALSE, fig.width = 9, fig.height = 6}
 # do we even want this?
 ratios <- unique_df_words %>%
@@ -147,13 +160,14 @@ ratios <- unique_df_words %>%
     mutate(logratio = log2(True / False)) %>%
     arrange(desc(logratio))
 
-ratios %>%
+top_and_bottom <- ratios %>%
     inner_join(nrc, by = "word") %>%
     filter(!sentiment %in% c("positive", "negative")) %>%
     mutate(sentiment = reorder(sentiment, -logratio),
            word = reorder(word, -logratio)) %>%
-    group_by(sentiment) %>%
-    top_n(10, abs(logratio)) %>%
+    group_by(sentiment) 
+#rbind(ratios %>% top_n(30, logratio), ratios %>% top_n(-30, logratio))
+rbind(top_and_bottom %>% top_n(5, logratio), top_and_bottom %>% top_n(-5, logratio)) %>%
     ungroup() %>%
     ggplot(aes(word, logratio, fill = logratio < 0)) +
     facet_wrap(~ sentiment, scales = "free", nrow = 2) +
@@ -164,9 +178,96 @@ ratios %>%
                     values = c("#E69F00", "#56B4E9"))
 ```
 
+In the positive sentiments:
+ - For robotic songs, we can see words such as bless, faith, respect, and law.
+  - Possibly showing robotic religious songs use themed words?
+ - For non-robotic songs, we can see words such as favorite, finally, and deal
+  - Ambiguous, not sure
+
+Curiously, the sentiment trend described above holds for the Pop genre:
+
+```{r, echo = FALSE, fig.width = 8, fig.height = 6}
+popdf <- unique_df_words %>% 
+    filter(str_detect(Genre, regex("pop", ignore_case = TRUE)))
+
+sources <- popdf %>%
+    group_by(Songwriter) %>%
+    mutate(total_words = n()) %>%
+    ungroup() %>%
+    distinct(Name, Songwriter, total_words)
+
+by_source_sentiment <- df_words %>%
+    inner_join(nrc, by = "word") %>%
+    count(sentiment, Name) %>%
+    ungroup() %>%
+    complete(sentiment, Name, fill = list(n = 0)) %>%
+    inner_join(sources, "Name") %>%
+    group_by(Songwriter, sentiment, total_words) %>%
+    summarize(words = sum(n)) %>%
+    ungroup()
+
+sentiment_diff <- by_source_sentiment %>%
+    group_by(sentiment) %>%
+    do(tidy(poisson.test(.$words, .$total_words))) %>%
+    ungroup()
+
+# plot
+sentiment_diff %>%
+    mutate(sentiment = reorder(sentiment, estimate)) %>%
+    ggplot(aes(sentiment, estimate)) + 
+    geom_errorbar(width = .5, aes(ymin = conf.low, ymax = conf.high)) +
+    geom_point(shape = 21, size = 2.5, fill = "white") +
+    scale_y_continuous("% change in Robotic relative to non-Robotic",
+                       breaks = c(0.6, 0.8, 1, 1.2, 1.4, 1.6),
+                       labels = c("-40%", "-20%", "0%", "20%", "40%", "60%")) +
+    coord_flip()
+```
+
+And the Rap genre:
+
+```{r, echo = FALSE, fig.width = 8, fig.height = 6}
+rapdf <- unique_df_words %>% 
+    filter(str_detect(Genre, regex("rap", ignore_case = TRUE)))
+
+sources <- rapdf %>%
+    group_by(Songwriter) %>%
+    mutate(total_words = n()) %>%
+    ungroup() %>%
+    distinct(Name, Songwriter, total_words)
+
+by_source_sentiment <- df_words %>%
+    inner_join(nrc, by = "word") %>%
+    count(sentiment, Name) %>%
+    ungroup() %>%
+    complete(sentiment, Name, fill = list(n = 0)) %>%
+    inner_join(sources, "Name") %>%
+    group_by(Songwriter, sentiment, total_words) %>%
+    summarize(words = sum(n)) %>%
+    ungroup()
+
+sentiment_diff <- by_source_sentiment %>%
+    group_by(sentiment) %>%
+    do(tidy(poisson.test(.$words, .$total_words))) %>%
+    ungroup()
+
+# plot
+sentiment_diff %>%
+    mutate(sentiment = reorder(sentiment, estimate)) %>%
+    ggplot(aes(sentiment, estimate)) + 
+    geom_errorbar(width = .5, aes(ymin = conf.low, ymax = conf.high)) +
+    geom_point(shape = 21, size = 2.5, fill = "white") +
+    scale_y_continuous("% change in Robotic relative to non-Robotic",
+                       breaks = c(0.6, 0.8, 1, 1.2, 1.4, 1.6),
+                       labels = c("-40%", "-20%", "0%", "20%", "40%", "60%")) +
+    coord_flip()
+```
+
+This means that even though non-robotic songs use less words relating to joy, positivity, sadness, negativity, and fear than robotic songs, the fact that this trend is seen across Genre as well implies robotic or not may only be a correlation with respect to sentiment differences.
+
+
 ## Latent Dirichlet Allocation
 
-To further explore
+To further explore our dataset for hidden structure, we applied Latent Dirichlet Allocation. We start with two topics. Below is a visualization of words that are most likely to be generated from the respective topic (terms with highest $\beta$):
 
 ```{r, fig.width = 8, fig.height = 9, echo = FALSE}
 word_counts <- df_words %>%
@@ -195,7 +296,14 @@ top_terms %>%
     coord_flip()
 ```
 
+Key takeaways:
 
+- Words most likely to be generated from topic 1 include love, yeah, baby, wanna, la, and ooh. These seem to originate from pop songs.
+- In contrast, words most likely to be generated from topic 2 include many expletives, particularly ones in rap songs. 
+
+This leads us to believe LDA accurately captures a difference between the language used in pop songs and rap songs.
+
+Below is a visualization that measures log-odds between the two topics. It tells the same story.
 
 ```{r, echo = FALSE, fig.width = 8, fig.height = 9}
 
@@ -215,4 +323,40 @@ beta_spread %>%
     coord_flip()
 
 ```
+
+## Principal Component Analysis
+
+Let's dive deeper into the lyrical content.
+
+```{r}
+# one entry for each song-word
+each_song <- unique_df_words %>%
+    count(word, Name, Artists, Songwriter)
+
+num_songs <- table(each_song$word)
+
+# One entry for each artist-word
+each_artist <- unique_df_words %>%
+    count(word, Artists)
+
+num_artists <- table(each_artist$word)
+
+good_words <- names(num_songs[num_songs > 20])
+    
+word_count_matrix <- each_song %>% filter(word %in% good_words) %>% cast_dtm(Name, word, n)
+
+robotic <- each_song %>% filter(word %in% good_words) %>% distinct(Name, .keep_all = TRUE) %>% select(Songwriter) %>% unlist()
+
+#word_counts <- df_words %>%
+#    count(Name, word, sort = TRUE) %>%
+#    filter(n > num_words_to_filter) %>%
+#    ungroup() # do we need this?
+
+#word_count_matrix <- word_counts %>% cast_dtm(Name, word, n)
+
+```
+
+
+## K-means
+
 
