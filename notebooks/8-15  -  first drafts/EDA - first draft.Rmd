@@ -1,0 +1,80 @@
+---
+title: "EDA - First Draft"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+library(purrr)
+library(magrittr)
+library(tidyr)
+library(tidytext)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tm)
+library(topicmodels)
+library(broom)
+```
+
+- Read in data
+- Remove songs that appear > 1 time on Billboard. We do this by keeping the observation with the maximum amount of weeks on the charts.
+
+```{r}
+library = "C:\\Users\\liblabs-user\\Desktop\\song-authorship\\data"
+laptop = "not yet"
+desktop = "C:\\Users\\Sam\\Desktop\\song authorship\\data"
+
+setwd(desktop)
+
+df <- read.csv(
+    paste(desktop, "\\Weekly_data_clean.csv", sep = ""),
+    encoding = "UTF-8",
+    stringsAsFactors = FALSE)
+
+df[is.na(df$Weeks.on.chart),"Weeks.on.chart"] <- 1
+
+max_week <- df %>% group_by(Artists, Name) %>%
+  summarise(Weeks.on.chart = max(Weeks.on.chart, na.rm = TRUE))
+
+#max_week[mapply(is.infinite, max_week)] <- 1
+
+final_df <- merge(x = max_week, y = df, by = c("Artists", "Name", "Weeks.on.chart"), all.x = TRUE)
+
+```
+
+Our current dataframe is in ___ format
+We modify it to tidy format, i.e. one word per row
+
+```{r}
+reg <- "([^A-Za-z\\d#@']+|'[^A-Za-z\\d#@]+)"
+
+df_words <- final_df %>%
+    unnest_tokens(word, Lyrics, token = "regex", pattern = reg, collapse = TRUE) %>%
+    filter(!word %in% stop_words$word, 
+           str_detect(word, "[a-z]"))
+
+unique_df_words<- df_words %>% distinct(Name, Artists, word, .keep_all = TRUE)
+
+write.csv(unique_df_words, file = "Weekly_data_tokenized.csv")
+
+write.csv(unique_df_words, file = "Weekly_data_tokenized_unique.csv")
+```
+
+## Log-odds ratio
+
+```{r}
+num_words_to_filter = 5
+
+ratios <- unique_df_words %>%
+    count(word, Songwriter) %>%
+    filter(n > num_words_to_filter) %>%
+    spread(Songwriter, n, fill = 0) %>%
+    ungroup() %>% #what is this used for?
+    mutate_each(funs((. + 1) / sum(. + 1)), -word) %>%
+    mutate(logratio = log2(True / False)) %>%
+    arrange(desc(logratio))
+
+```
+
+
