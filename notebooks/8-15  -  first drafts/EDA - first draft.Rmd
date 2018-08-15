@@ -1,6 +1,8 @@
 ---
 title: "EDA - First Draft"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -17,8 +19,16 @@ library(topicmodels)
 library(broom)
 ```
 
-- Read in data
-- Remove songs that appear > 1 time on Billboard. We do this by keeping the observation with the maximum amount of weeks on the charts.
+First, let's define the word "Robotic" to refer to songs where an external songwriter was credited. In this notebook, we do several exploratory analyses:
+
+- Log-odds ratio of words in robotic songs and words in non-robotic songs
+- Sentiment analysis between robotic and non-robotic songs
+- Latent Dirichlet Allocation, unsupervised
+
+We first read in our data. Each row is a song on Billboard and each column is an attribute.
+
+We remove songs that appear > 1 time on Billboard and we keep the observation with the maximum amount of weeks on the charts.
+
 
 ```{r}
 library = "C:\\Users\\liblabs-user\\Desktop\\song-authorship\\data"
@@ -43,8 +53,7 @@ final_df <- merge(x = max_week, y = df, by = c("Artists", "Name", "Weeks.on.char
 
 ```
 
-Our current dataframe is in ___ format
-We modify it to tidy format, i.e. one word per row
+Our current dataframe is in not in a tidy format so we fix that (one word per row).
 
 ```{r}
 reg <- "([^A-Za-z\\d#@']+|'[^A-Za-z\\d#@]+)"
@@ -54,16 +63,20 @@ df_words <- final_df %>%
     filter(!word %in% stop_words$word, 
            str_detect(word, "[a-z]"))
 
-unique_df_words<- df_words %>% distinct(Name, Artists, word, .keep_all = TRUE)
+unique_df_words <- df_words %>% distinct(Name, Artists, word, .keep_all = TRUE)
 
-write.csv(unique_df_words, file = "Weekly_data_tokenized.csv")
+write.csv(df_words, file = "Weekly_data_tokenized.csv")
 
 write.csv(unique_df_words, file = "Weekly_data_tokenized_unique.csv")
 ```
 
 ## Log-odds ratio
 
-```{r}
+The log odds ratio for each word is calculated as
+
+$$\log_2\left(\frac{\frac{\text{# in robotic}}{\text{Total robotic}}}{\frac{\text{# in non-robotic}}{\text{Total non-robotic}}}\right)$$
+
+```{r, fig.width = 8, fig.height = 9, echo = FALSE}
 num_words_to_filter = 5
 
 ratios <- unique_df_words %>%
@@ -75,6 +88,131 @@ ratios <- unique_df_words %>%
     mutate(logratio = log2(True / False)) %>%
     arrange(desc(logratio))
 
+rbind(ratios %>% top_n(30, logratio), ratios %>% top_n(-30, logratio)) %>%
+    mutate(word = reorder(word, logratio)) %>%
+    ggplot(aes(word, logratio)) +
+    geom_col(show.legend = FALSE) +
+    coord_flip()
+
 ```
 
+## Sentiment Analysis
+
+```{r, echo = FALSE, fig.width = 8, fig.height = 6}
+nrc <- sentiments %>%
+    filter(lexicon == "nrc") %>%
+    dplyr::select(word, sentiment)
+
+sources <- df_words %>%
+    group_by(Songwriter) %>%
+    mutate(total_words = n()) %>%
+    ungroup() %>%
+    distinct(Name, Songwriter, total_words)
+
+by_source_sentiment <- df_words %>%
+    inner_join(nrc, by = "word") %>%
+    count(sentiment, Name) %>%
+    ungroup() %>%
+    complete(sentiment, Name, fill = list(n = 0)) %>%
+    inner_join(sources, "Name") %>%
+    group_by(Songwriter, sentiment, total_words) %>%
+    summarize(words = sum(n)) %>%
+    ungroup()
+
+sentiment_diff <- by_source_sentiment %>%
+    group_by(sentiment) %>%
+    do(tidy(poisson.test(.$words, .$total_words))) %>%
+    ungroup()
+
+# plot
+sentiment_diff %>%
+    mutate(sentiment = reorder(sentiment, estimate)) %>%
+    ggplot(aes(sentiment, estimate)) + 
+    geom_errorbar(width = .5, aes(ymin = conf.low, ymax = conf.high)) +
+    geom_point(shape = 21, size = 2.5, fill = "white") +
+    scale_y_continuous("% change in Robotic relative to non-Robotic",
+                       breaks = c(0.6, 0.8, 1, 1.2, 1.4, 1.6),
+                       labels = c("-40%", "-20%", "0%", "20%", "40%", "60%")) +
+    coord_flip()
+```
+
+```{r, echo = FALSE, fig.width = 9, fig.height = 6}
+# do we even want this?
+ratios <- unique_df_words %>%
+    count(word, Songwriter) %>%
+    filter(n > num_words_to_filter) %>%
+    spread(Songwriter, n, fill = 0) %>%
+    ungroup() %>% #what is this used for?
+    mutate_each(funs((. + 1) / sum(. + 1)), -word) %>%
+    mutate(logratio = log2(True / False)) %>%
+    arrange(desc(logratio))
+
+ratios %>%
+    inner_join(nrc, by = "word") %>%
+    filter(!sentiment %in% c("positive", "negative")) %>%
+    mutate(sentiment = reorder(sentiment, -logratio),
+           word = reorder(word, -logratio)) %>%
+    group_by(sentiment) %>%
+    top_n(10, abs(logratio)) %>%
+    ungroup() %>%
+    ggplot(aes(word, logratio, fill = logratio < 0)) +
+    facet_wrap(~ sentiment, scales = "free", nrow = 2) +
+    geom_bar(stat = "identity") +
+    theme(axis.text.x = element_text(angle = 50, hjust = 1)) +
+    labs(x = "", y = "Robotic / non-Robotic log ratio") +
+    scale_fill_manual(name = "", labels = c("Robotic", "non-Robotic"),
+                    values = c("#E69F00", "#56B4E9"))
+```
+
+## Latent Dirichlet Allocation
+
+To further explore
+
+```{r, fig.width = 8, fig.height = 9, echo = FALSE}
+word_counts <- df_words %>%
+    count(Name, word, sort = TRUE) %>%
+    filter(n > num_words_to_filter) %>%
+    ungroup() # do we need this?
+    
+word_count_matrix <- word_counts %>% cast_dtm(Name, word, n)
+
+# create LDA object
+songs_lda <- LDA(word_count_matrix, k = 2, control = list(seed = 0))
+topics <- tidy(songs_lda, matrix = "beta")
+    
+# visualize
+top_terms <- topics %>%
+    group_by(topic) %>%
+    top_n(40, beta) %>%
+    ungroup() %>%
+    arrange(topic, -beta)
+    
+top_terms %>%
+    mutate(term = reorder(term, beta)) %>%
+    ggplot(aes(term, beta, fill = factor(topic))) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~ topic, scales = "free") + # partition by topic
+    coord_flip()
+```
+
+
+
+```{r, echo = FALSE, fig.width = 8, fig.height = 9}
+
+beta_spread <- topics %>%
+    mutate(topic = paste0("topic", topic)) %>% # adds topic to each number   
+    spread(topic, beta) %>% # key, values w/ values for each var
+    filter(topic1 > .005 | topic2 > .005) %>%
+    mutate(log_ratio = log2(topic2 / topic1)) %>%
+    #filter(abs(log_ratio) < 50) %>%
+    arrange(-log_ratio)
+
+# plot
+beta_spread %>%
+    mutate(term = reorder(term, log_ratio)) %>%
+    ggplot(aes(term, log_ratio)) + 
+    geom_col(show.legend = FALSE) +
+    coord_flip()
+
+```
 
