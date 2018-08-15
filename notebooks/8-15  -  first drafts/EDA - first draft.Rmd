@@ -17,18 +17,19 @@ library(ggplot2)
 library(tm)
 library(topicmodels)
 library(broom)
-library(corpus)
 ```
 
-First, let's define the word "Robotic" to refer to songs where an external songwriter was credited. In this notebook, we do several exploratory analyses:
+In this notebook, we do several exploratory analyses:
 
 - Log-odds ratio of words in robotic songs and words in non-robotic songs
 - Sentiment analysis between robotic and non-robotic songs
 - Latent Dirichlet Allocation, unsupervised
+- PCA
+- K-means on principal components
 
-We first read in our data. Each row is a song on Billboard and each column is an attribute.
+First, let's define the word "Robotic" to refer to songs where an external songwriter was credited.
 
-We remove songs that appear > 1 time on Billboard and we keep the observation with the maximum amount of weeks on the charts.
+We first read in our data. Each row is a song on Billboard and each column is an attribute. We remove songs that appear > 1 time on Billboard and we keep the observation with the maximum amount of weeks on the charts.
 
 
 ```{r}
@@ -52,6 +53,10 @@ max_week <- df %>% group_by(Artists, Name) %>%
 
 final_df <- merge(x = max_week, y = df, by = c("Artists", "Name", "Weeks.on.chart"), all.x = TRUE)
 
+final_df$ID <- seq(1:nrow(final_df))
+
+write.csv(final_df, file = "Weekly_data_top_week.csv")
+
 ```
 
 Our current dataframe is in not in a tidy format so we fix that (one word per row). We also remove stop words.
@@ -64,7 +69,7 @@ df_words <- final_df %>%
     filter(!word %in% stop_words$word, str_detect(word, "[a-z]"))
     
 
-df_words$word <- text_tokens(df_words$word, stemmer = "en")
+#df_words$word <- text_tokens(df_words$word, stemmer = "en")
 
 unique_df_words <- df_words %>% distinct(Name, Artists, word, .keep_all = TRUE)
 
@@ -375,6 +380,8 @@ Key takeaways:
 
 We can see that between robotic and non-robotic songs, the principal components do not separate our data very well.
 
+## K-means
+
 ```{r, echo = FALSE, fig.width = 8, fig.height = 8}
 km <- kmeans(pca$x[,1:2], centers = 2)
 
@@ -386,7 +393,7 @@ ggplot(, aes(x = pca$x[,1], y = pca$x[,2])) +
   geom_point(aes(x = km$centers[,1], y = km$centers[,2], pch = factor(1:2)))
 ```
 
+Since PCA did not separate the groups very well, we did not expect K-means to find good clusters to describe robotic vs. non-robotic songs. However, for K-means, we can see the algorithm was able to find two clusters: one with a large variance and the other shaped more like an ellipse.
 
-## K-means
 
 

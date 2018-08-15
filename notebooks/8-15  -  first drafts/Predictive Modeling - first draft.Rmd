@@ -5,7 +5,7 @@ output:
     df_print: paged
 ---
 
-```{r, include = False}
+```{r, include = FALSE}
 library(tidyr)
 library(tidytext)
 library(dplyr)
@@ -15,7 +15,6 @@ library(topicmodels)
 library(broom)
 library(caret)
 library(magrittr)
-install.packages("randomForest")
 require(randomForest)
 ```
 
@@ -123,11 +122,22 @@ conf.mat
 
 ## Random Forest
 
+Next, we tried a random forest on the term document matrix.
+
 ```{r}
 forest <- train(x = as.matrix(dtm.train),
                 y = df.train.lab,
                 method = "rf",
-                ntree = 200,
+                ntree = 5,
                 trControl = trainControl(method = "oob"))
+pred <- predict(forest$finalModel, as.matrix(dtm.test))
+conf.mat <- confusionMatrix(pred, df.test.lab)
+```
+
+From the results we got 83% accuracy. However, every single prediction on the test set was False. 
+This means we have a class imbalance issue here (or something I am missing).
+
+```{r}
+conf.mat
 ```
 
