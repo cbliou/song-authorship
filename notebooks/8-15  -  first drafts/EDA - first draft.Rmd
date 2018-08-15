@@ -17,6 +17,7 @@ library(ggplot2)
 library(tm)
 library(topicmodels)
 library(broom)
+library(corpus)
 ```
 
 First, let's define the word "Robotic" to refer to songs where an external songwriter was credited. In this notebook, we do several exploratory analyses:
@@ -60,8 +61,10 @@ reg <- "([^A-Za-z\\d#@']+|'[^A-Za-z\\d#@]+)"
 
 df_words <- final_df %>%
     unnest_tokens(word, Lyrics, token = "regex", pattern = reg, collapse = TRUE) %>%
-    filter(!word %in% stop_words$word, 
-           str_detect(word, "[a-z]"))
+    filter(!word %in% stop_words$word, str_detect(word, "[a-z]"))
+    
+
+df_words$word <- text_tokens(df_words$word, stemmer = "en")
 
 unique_df_words <- df_words %>% distinct(Name, Artists, word, .keep_all = TRUE)
 
@@ -326,9 +329,12 @@ beta_spread %>%
 
 ## Principal Component Analysis
 
-Let's dive deeper into the lyrical content.
+Let's dive deeper into the lyrical content. We create a document term matrix where we filter out terms that appear in less than 10 songs. We then run PCA on it. Below is a visualization of the first two principal components:
 
-```{r}
+```{r, echo = FALSE, fig.width = 8, fig.height = 8}
+
+num_songs_present <- 10
+
 # one entry for each song-word
 each_song <- unique_df_words %>%
     count(word, Name, Artists, Songwriter)
@@ -341,19 +347,43 @@ each_artist <- unique_df_words %>%
 
 num_artists <- table(each_artist$word)
 
-good_words <- names(num_songs[num_songs > 20])
+good_words <- names(num_songs[num_songs > num_songs_present])
     
-word_count_matrix <- each_song %>% filter(word %in% good_words) %>% cast_dtm(Name, word, n)
+word_count_matrix <- each_song %>% 
+  filter(word %in% good_words) %>% 
+  cast_dtm(Name, word, n)
 
-robotic <- each_song %>% filter(word %in% good_words) %>% distinct(Name, .keep_all = TRUE) %>% select(Songwriter) %>% unlist()
+robotic <- each_song %>% 
+  filter(word %in% good_words) %>% 
+  distinct(Name, .keep_all = TRUE) %>% 
+  select(Songwriter) %>% 
+  unlist()
 
-#word_counts <- df_words %>%
-#    count(Name, word, sort = TRUE) %>%
-#    filter(n > num_words_to_filter) %>%
-#    ungroup() # do we need this?
+robotic <- robotic == "True"
 
-#word_count_matrix <- word_counts %>% cast_dtm(Name, word, n)
+pca <- prcomp(word_count_matrix)
 
+# Plot first 2 PCs and authors
+ggplot(, aes(x = pca$x[,1], y = pca$x[,2], col = as.factor(robotic))) + 
+  geom_point() + xlab("First PC") + 
+  ylab("Second PC") + 
+  scale_colour_discrete(name = "Robotic")
+
+```
+
+Key takeaways:
+
+We can see that between robotic and non-robotic songs, the principal components do not separate our data very well.
+
+```{r, echo = FALSE, fig.width = 8, fig.height = 8}
+km <- kmeans(pca$x[,1:2], centers = 2)
+
+ggplot(, aes(x = pca$x[,1], y = pca$x[,2])) + 
+  geom_point(aes(col = as.factor(robotic), pch = as.factor(km$cluster))) + 
+  xlab("First PC") + ylab("Second PC") + 
+  scale_colour_discrete(name = "Author") + 
+  scale_shape_discrete(name = "Cluster") +
+  geom_point(aes(x = km$centers[,1], y = km$centers[,2], pch = factor(1:2)))
 ```
 
 
