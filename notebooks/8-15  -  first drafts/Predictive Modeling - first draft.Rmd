@@ -1,0 +1,133 @@
+---
+title: "Predictive Modeling - first draft"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, include = False}
+library(tidyr)
+library(tidytext)
+library(dplyr)
+library(e1071)
+library(tm)
+library(topicmodels)
+library(broom)
+library(caret)
+library(magrittr)
+install.packages("randomForest")
+require(randomForest)
+```
+
+
+In this notebook, we do several predictive analyses:
+
+- Naive Bayes
+- Random Forest
+- Logistic regression
+
+Read in data:
+
+```{r}
+
+library = "C:\\Users\\liblabs-user\\Desktop\\song-authorship\\data"
+laptop = "not yet"
+desktop = "C:\\Users\\Sam\\Desktop\\song authorship\\data"
+
+df <- read.csv(
+    paste(desktop, "\\Weekly_data_top_week.csv", sep = ""),
+    encoding = "UTF-8",
+    stringsAsFactors = FALSE)
+
+df_words <- read.csv(
+    paste(desktop, "\\Weekly_data_tokenized.csv", sep = ""),
+    encoding = "UTF-8",
+    stringsAsFactors = FALSE)
+
+unique_df_words <- read.csv(
+    paste(desktop, "\\Weekly_data_tokenized_unique.csv", sep = ""),
+    encoding = "UTF-8",
+    stringsAsFactors = FALSE)
+
+```
+
+Create the term document matrix with word frequencies as entries.
+
+```{r}
+set.seed(1)
+num_songs_present <- 5
+num_words_to_filter <- 5
+
+# one entry for each song-word
+each_song <- unique_df_words %>%
+    count(word, ID, Artists, Songwriter)
+
+num_songs <- table(each_song$word)
+
+good_words <- names(num_songs[num_songs > num_songs_present])
+
+word_count_matrix <- df_words %>%
+  count(ID, word, sort = TRUE) %>%
+  filter(word %in% good_words, n > num_words_to_filter) %>%
+  ungroup() %>% # do we need this?
+  cast_dtm(ID, word, n)
+
+#word_count_matrix <- #word_count_matrix[sample(nrow(word_count_matrix)),]
+```
+
+
+Prepare training and test set:
+ - We opted for a 80-20 split
+
+```{r}
+indices <- sample(word_count_matrix$dimnames$Docs)
+
+dtm.train <- word_count_matrix[indices[1:(nrow(word_count_matrix)*0.8)],]
+dtm.test <- word_count_matrix[indices[(nrow(word_count_matrix)*0.8+1):nrow(word_count_matrix)],]
+
+df.train <- df[df$ID %in% indices[1:(nrow(word_count_matrix)*0.8)], ]
+df.test <- df[df$ID %in% indices[(nrow(word_count_matrix)*0.8+1):nrow(word_count_matrix)], ]
+df.train.lab <- as.factor(df.train$Songwriter)
+df.test.lab <- as.factor(df.test$Songwriter)
+
+```
+
+## Naive Bayes
+
+We start with the simplest model: predicting whether a song was written by a songwriter based solely off of the lyrics.
+
+On page 25 of [these slides](https://web.stanford.edu/~jurafsky/slp3/slides/7_Sent.pdf), Jurafsky describes a modified Naive Bayes model that only checks whether a word occurs in a document or not (binary model). We utilize this version of Naive Bayes because Jurafsky points out that word counts *may* not matter as much as word occurence.
+
+```{r}
+
+convert_count <- function(x) {
+  y <- ifelse(x > 0, "Yes", "No")
+  y
+}
+
+
+trainNB <- apply(dtm.train, MARGIN = 2, convert_count)
+testNB <- apply(dtm.test, MARGIN = 2, convert_count)
+
+classifier <- naiveBayes(trainNB, df.train.lab)
+pred <- predict(classifier, testNB)
+conf.mat <- confusionMatrix(pred, df.test.lab)
+
+```
+
+The Naive Bayes model was able to achieve an accuracy of 78%. Not bad.
+
+```{r}
+conf.mat
+```
+
+## Random Forest
+
+```{r}
+forest <- train(x = as.matrix(dtm.train),
+                y = df.train.lab,
+                method = "rf",
+                ntree = 200,
+                trControl = trainControl(method = "oob"))
+```
+
