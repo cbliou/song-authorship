@@ -55,7 +55,7 @@ final_df <- merge(x = max_week, y = df, by = c("Artists", "Name", "Weeks.on.char
 
 final_df$ID <- seq(1:nrow(final_df))
 
-write.csv(final_df, file = "Weekly_data_top_week.csv")
+write.csv(paste0(desktop, "\\", final_df), file = "Weekly_data_top_week.csv")
 
 ```
 
