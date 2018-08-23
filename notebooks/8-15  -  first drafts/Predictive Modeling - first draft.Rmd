@@ -141,3 +141,13 @@ This means we have a class imbalance issue here (or something I am missing).
 conf.mat
 ```
 
+## Logistic regression
+
+```{r}
+df$Songwriter <- factor(df$Songwriter)
+logit <- glm(Songwriter ~ Peak.position + Weeks.on.chart, 
+             data = df,
+             family = "binomial")
+summary(logit)
+```
+
