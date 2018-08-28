@@ -1,5 +1,5 @@
 ---
-title: "First draft"
+title: "04 - Analysis"
 output:
   html_document:
     df_print: paged
@@ -46,25 +46,30 @@ statlab = "C:\\Users\\cbliou\\Desktop\\song-authorship\\data"
 reg <- "([^A-Za-z\\d#@']+|'[^A-Za-z\\d#@]+)"
 
 df <- read.csv(
-    paste(statlab, "\\Weekly_data_top_week.csv", sep = ""),
-    encoding = "UTF-8",
-    stringsAsFactors = FALSE)
+  paste(statlab, "\\Weekly_data_top_week.csv", sep = ""),
+  encoding = "UTF-8",
+  stringsAsFactors = FALSE)
 
 df_words <- read.csv(
-    paste(statlab, "\\Weekly_data_tokenized.csv", sep = ""),
-    encoding = "UTF-8",
-    stringsAsFactors = FALSE)
-
-df_words = df_words[df_words$word != "ing",]
+  paste(statlab, "\\Weekly_data_tokenized.csv", sep = ""),
+  encoding = "UTF-8",
+  stringsAsFactors = FALSE)
 
 unique_df_words <- read.csv(
-    paste(statlab, "\\Weekly_data_tokenized_unique.csv", sep = ""),
-    encoding = "UTF-8",
-    stringsAsFactors = FALSE)
+  paste(statlab, "\\Weekly_data_tokenized_unique.csv", sep = ""),
+  encoding = "UTF-8",
+  stringsAsFactors = FALSE)
 
+metrics <- read.csv(
+  paste(statlab, "\\Song_Complexity.csv", sep = ""),
+  encoding = "UTF-8",
+  stringsAsFactors = FALSE
+)
 
+df <- merge(x = df, y = metrics, by = c("X"), all.x = TRUE)
+colnames(df)[colnames(df) == "Songwriter.x"] <- "Songwriter"
 
-unique_df_words = unique_df_words[unique_df_words$word != "ing",]
+#final_df <- merge(x = max_week, y = df, by = c("Artists", "Name", "Weeks.on.chart"), all.x = TRUE)
 
 ```
 
@@ -176,7 +181,7 @@ We utilized logisitic regression on the peak position of a song on the Billboard
 
 ```{r}
 df$Songwriter <- factor(df$Songwriter)
-logit <- glm(Songwriter ~ Peak.position + Weeks.on.chart, 
+logit <- glm(Songwriter ~ Peak.position + Weeks.on.chart + diversity + num_profanity, 
              data = df,
              family = "binomial")
 summary(logit)

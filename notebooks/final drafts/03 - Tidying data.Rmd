@@ -1,0 +1,69 @@
+---
+title: "03 - Tidying data"
+author: "Kelly Bodwin, Charlie Liou"
+output: html_notebook
+---
+
+```{r}
+library = "C:\\Users\\liblabs-user\\Desktop\\song-authorship\\data"
+laptop = "not yet"
+desktop = "C:\\Users\\Sam\\Desktop\\song authorship\\data"
+statlab = "C:\\Users\\cbliou\\Desktop\\song-authorship\\data"
+```
+
+First, we need to impute some values:
+ - Songs that were only on the chart for one week did not have a weeks on chart section on Billboard
+ - songs that did not have a peak position had their peak position value imputed with their weekly rank.
+
+```{r}
+df <- read.csv(
+    paste(statlab, "\\Weekly_data_clean.csv", sep = ""),
+    encoding = "UTF-8",
+    stringsAsFactors = FALSE)
+
+df[is.na(df$Weeks.on.chart),"Weeks.on.chart"] <- 1
+df[is.na(df$Peak.position), "Peak.position"] <- df[is.na(df$Peak.position), "Weekly.rank"]
+
+max_week <- df %>% group_by(Artists, Name) %>%
+  summarise(Weeks.on.chart = max(Weeks.on.chart, na.rm = TRUE))
+
+final_df <- merge(x = max_week, y = df, by = c("Artists", "Name", "Weeks.on.chart"), all.x = TRUE)
+
+final_df$ID <- seq(1:nrow(final_df))
+
+write.csv(final_df, file = paste0(statlab, "\\", "Weekly_data_top_week.csv"))
+```
+
+# Cleaning and filtering
+
+* Artists need to be separated by commas.  
+* Words with triple and beyond letters should count the same ("aaah" -> "aah")
+* Words with a contraction should drop the contraction ("bitch'll" -> "bitch")
+* No punctuation in words
+* Words in SnowballC's dictionary only.
+
+Credits to Dr. Kelly Bodwin for word cleaning code
+
+```{r}
+reg <- "([^A-Za-z\\d#@']+|'[^A-Za-z\\d#@]+)"
+
+df_words <- final_df %>%
+  unnest_tokens(word, Lyrics, token = "regex", pattern = reg, collapse = TRUE) %>% 
+  mutate(
+        word = gsub("([A-z])\\1{2,}", '\\1\\1', word), # ayyyy -> ayy
+        word = gsub("([A-z])'[A-z]+", '\\1', word),
+        word = gsub("[^A-z]", '', word)
+  ) %>%
+  mutate(
+      Artists = str_to_lower(gsub('([A-z])([A-Z][a-z])|([a-z])([A-Z])', '\\1, \\2', Artists)),
+      Writing.Credits = str_to_lower(Writing.Credits)
+  ) %>%
+  filter(!word %in% stop_words$word, str_detect(word, "[a-z]"))
+
+unique_df_words <- df_words %>% distinct(Name, Artists, word, .keep_all = TRUE)
+
+write.csv(df_words, file = paste0(statlab, "\\", "Weekly_data_tokenized.csv"))
+
+write.csv(unique_df_words, paste0(statlab, "\\", file = "Weekly_data_tokenized_unique.csv"))
+```
+
