@@ -1,6 +1,7 @@
 ---
 title: "04 - Analysis"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -14,10 +15,10 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 install.packages("tm")
 #install.packages("topicmodels")
 #install.packages("broom")
-install.packages("e1071")
 install.packages("caret")
 #install.packages("broom")
 install.packages("randomForest")
+install.packages("e1071")
 
 library(purrr)
 library(magrittr)
@@ -46,22 +47,22 @@ statlab = "C:\\Users\\cbliou\\Desktop\\song-authorship\\data"
 reg <- "([^A-Za-z\\d#@']+|'[^A-Za-z\\d#@]+)"
 
 df <- read.csv(
-  paste(statlab, "\\Weekly_data_top_week.csv", sep = ""),
+  paste(desktop, "\\Weekly_data_top_week.csv", sep = ""),
   encoding = "UTF-8",
   stringsAsFactors = FALSE)
 
 df_words <- read.csv(
-  paste(statlab, "\\Weekly_data_tokenized.csv", sep = ""),
+  paste(desktop, "\\Weekly_data_tokenized.csv", sep = ""),
   encoding = "UTF-8",
   stringsAsFactors = FALSE)
 
 unique_df_words <- read.csv(
-  paste(statlab, "\\Weekly_data_tokenized_unique.csv", sep = ""),
+  paste(desktop, "\\Weekly_data_tokenized_unique.csv", sep = ""),
   encoding = "UTF-8",
   stringsAsFactors = FALSE)
 
 metrics <- read.csv(
-  paste(statlab, "\\Song_Complexity.csv", sep = ""),
+  paste(desktop, "\\Song_Complexity.csv", sep = ""),
   encoding = "UTF-8",
   stringsAsFactors = FALSE
 )
@@ -74,11 +75,11 @@ colnames(df)[colnames(df) == "Songwriter.x"] <- "Songwriter"
 ```
 
 # Introduction
-The Billboard Charts are an industry standard of musical success. Nowadays, a non-trivial number of songs on the charts are co-authored by ghostwriters (footnote here to describe what a ghostwriter is). We seek to compare ghostwritten songs with non-ghostwritten songs and to determine the existence of linguistic differences between to the two types.
+The Billboard Charts are an industry standard of musical success. Nowadays, a non-trivial number of songs on the charts are co-authored by songwriters (footnote here to describe what a songwriter is). We seek to compare songwritten songs with non-songwritten songs and to determine the existence of linguistic differences between to the two types.
 
 # Research Questions
 
-We first define a song as "Robotic" if the song is co-written by one of the songwriters we identify as common ghostwriters. This is merely semantic and allows us to say "robotic" instead of "songs written by ghostwriters."  
+We first define a song as "Robotic" if the song is co-written by one of the songwriters we identify as common songwriters This is merely semantic and allows us to say "robotic" instead of "songs written by songwriters."  
 
 Our primary research question includes determining linguistic features of lyrics that best differentiate Robotic songs from original songs. Our second research question involves finding differences between Robotic and original songs in general, including lyrical complexity and ranking data.
 
@@ -156,15 +157,15 @@ sum(df$Songwriter == "False") / dim(df)[1]
 We also deployed a random forest on the term-document matrix.
 
 ```{r}
-#forest <- train(x = as.matrix(dtm.train),
-#                y = df.train.lab,
-#                method = "rf",
-#                ntree = 5,
-#                trControl = trainControl(method = "oob"))
-#pred <- predict(forest$finalModel, as.matrix(dtm.test))
-#conf.mat <- confusionMatrix(pred, df.test.lab)
+forest <- train(x = as.matrix(dtm.train),
+                y = df.train.lab,
+                method = "rf",
+                ntree = 5,
+                trControl = trainControl(method = "oob"))
+pred <- predict(forest$finalModel, as.matrix(dtm.test))
+conf.mat <- confusionMatrix(pred, df.test.lab)
 
-#conf.mat
+conf.mat
 ```
 
 Our overall accuracy rate of __ was higher than Naive Bayes. However, the random forest predicted every song to be non-robotic. This likely happened due to the class imbalance in our data.
@@ -181,7 +182,7 @@ We utilized logisitic regression on the peak position of a song on the Billboard
 
 ```{r}
 df$Songwriter <- factor(df$Songwriter)
-logit <- glm(Songwriter ~ Peak.position + Weeks.on.chart + diversity + num_profanity, 
+logit <- glm(Songwriter ~ Peak.position + Weeks.on.chart + diversity + num_profanity + tf_idf_complexity, 
              data = df,
              family = "binomial")
 summary(logit)
@@ -211,7 +212,7 @@ Key takeaways:
 
 For sentiments, we used the (NRC Emotion Lexicon)[https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm]. We run a Poisson test on each sentiment between robotic and non-robotic songs. The 95% confidence intervals are plotted below:
 
-```{r, echo = FALSE, fig.width = 8, fig.height = 6}
+```{r, include = FALSE, fig.width = 8, fig.height = 6}
 num_words_to_filter = 5
 
 nrc <- sentiments %>%
@@ -237,11 +238,12 @@ by_source_sentiment <- unique_df_words %>%
 sentiment_diff <- by_source_sentiment %>%
     group_by(sentiment) %>%
     do(tidy(poisson.test(.$words, .$total_words))) %>%
-    ungroup()
+    ungroup() %>%
+    mutate(sentiment = reorder(sentiment, estimate),
+           subset = "All genres")
 
 # plot
-sentiment_diff %>%
-    mutate(sentiment = reorder(sentiment, estimate)) %>%
+sentiment_diff  %>%
     ggplot(aes(sentiment, estimate)) + 
     geom_errorbar(width = .5, aes(ymin = conf.low, ymax = conf.high)) +
     geom_point(shape = 21, size = 2.5, fill = "white") +
@@ -257,7 +259,7 @@ In general, non-Robotic songs utilize less words with sentiments relating to joy
 
 The sentiment trend described above holds for the Pop genre:
 
-```{r, echo = FALSE, fig.width = 8, fig.height = 6}
+```{r, include = FALSE, fig.width = 8, fig.height = 6}
 popdf <- unique_df_words %>% 
     filter(str_detect(Genre, regex("pop", ignore_case = TRUE)))
 
@@ -277,14 +279,15 @@ by_source_sentiment <- unique_df_words %>%
     summarize(words = sum(n)) %>%
     ungroup()
 
-sentiment_diff <- by_source_sentiment %>%
+sentiment_diff_pop <- by_source_sentiment %>%
     group_by(sentiment) %>%
     do(tidy(poisson.test(.$words, .$total_words))) %>%
-    ungroup()
+    ungroup()%>%
+    mutate(sentiment = reorder(sentiment, estimate),
+           subset = "Pop")
 
 # plot
-sentiment_diff %>%
-    mutate(sentiment = reorder(sentiment, estimate)) %>%
+sentiment_diff_pop  %>%
     ggplot(aes(sentiment, estimate)) + 
     geom_errorbar(width = .5, aes(ymin = conf.low, ymax = conf.high)) +
     geom_point(shape = 21, size = 2.5, fill = "white") +
@@ -296,7 +299,7 @@ sentiment_diff %>%
 
 and the rap genre:
 
-```{r, echo = FALSE, fig.width = 8, fig.height = 6}
+```{r, include = FALSE, fig.width = 8, fig.height = 6}
 rapdf <- unique_df_words %>% 
     filter(str_detect(Genre, regex("rap", ignore_case = TRUE)))
 
@@ -316,14 +319,15 @@ by_source_sentiment <- unique_df_words %>%
     summarize(words = sum(n)) %>%
     ungroup()
 
-sentiment_diff <- by_source_sentiment %>%
+sentiment_diff_rap <- by_source_sentiment %>%
     group_by(sentiment) %>%
     do(tidy(poisson.test(.$words, .$total_words))) %>%
-    ungroup()
+    ungroup() %>%
+    mutate(sentiment = reorder(sentiment, estimate),
+           subset = "Rap")
 
 # plot
-sentiment_diff %>%
-    mutate(sentiment = reorder(sentiment, estimate)) %>%
+sentiment_diff_rap  %>%
     ggplot(aes(sentiment, estimate)) + 
     geom_errorbar(width = .5, aes(ymin = conf.low, ymax = conf.high)) +
     geom_point(shape = 21, size = 2.5, fill = "white") +
@@ -332,6 +336,55 @@ sentiment_diff %>%
                        labels = c("-40%", "-20%", "0%", "20%", "40%", "60%")) +
     coord_flip()
 ```
+
+```{r}
+rockdf <- unique_df_words %>% 
+    filter(str_detect(Genre, regex("rock", ignore_case = TRUE)))
+
+sources <- rockdf %>%
+    group_by(Songwriter) %>%
+    mutate(total_words = n()) %>%
+    ungroup() %>%
+    distinct(Name, Songwriter, total_words)
+
+by_source_sentiment <- unique_df_words %>%
+    inner_join(nrc, by = "word") %>%
+    count(sentiment, Name) %>%
+    ungroup() %>%
+    complete(sentiment, Name, fill = list(n = 0)) %>%
+    inner_join(sources, "Name") %>%
+    group_by(Songwriter, sentiment, total_words) %>%
+    summarize(words = sum(n)) %>%
+    ungroup()
+
+sentiment_diff_rock <- by_source_sentiment %>%
+    group_by(sentiment) %>%
+    do(tidy(poisson.test(.$words, .$total_words))) %>%
+    ungroup()%>%
+    mutate(sentiment = reorder(sentiment, estimate),
+           subset = "Rock")
+
+
+
+all_sents <- rbind(sentiment_diff,
+                   sentiment_diff_pop,
+                   sentiment_diff_rap,
+                   sentiment_diff_rock)
+
+all_sents %>%
+  ggplot(aes(sentiment, estimate, colour = subset)) +
+  scale_color_manual(values=c("#154D33", "#E69F00", "#56B4E9", "#ba2525")) +
+  geom_point(position = position_dodge(width = 0.5)) + 
+  geom_errorbar(width = 0.5, aes(ymin = conf.low, ymax = conf.high), position = "dodge") +
+  scale_y_continuous("% change in Robotic relative to non-Robotic",
+                     breaks = c(0.6, 0.8, 1, 1.2, 1.4, 1.6),
+                     labels = c("-40%", "-20%", "0%", "20%", "40%", "60%")) +
+  coord_flip()
+
+ggsave("sentiment.png", width = 25, height = 19.5, units = "cm")
+
+```
+
 
 This shows that sentiment differences are nearly uniform across the common genres on Billboard. As a result, we can conclude there are significiant sentiment differences between robotic and non-robotic songs.
 

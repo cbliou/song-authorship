@@ -1,0 +1,167 @@
+---
+title: "Some random code"
+author: "KB"
+date: "August 23, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+install.packages("tidyverse")
+library(tidyverse)
+library(tm)
+library(topicmodels)
+library(tidytext)
+library(SnowballC)
+```
+
+Read data:
+
+```{r}
+
+library = "C:\\Users\\liblabs-user\\Desktop\\song-authorship\\data"
+laptop = "not yet"
+desktop = "C:\\Users\\Sam\\Desktop\\song authorship\\data"
+statlab = "C:\\Users\\cbliou\\Desktop\\song-authorship\\data"
+
+df <- read.csv(paste0(desktop, "/Weekly_data_top_week.csv"),
+    encoding = "UTF-8",
+    stringsAsFactors = FALSE)
+
+```
+
+Setup:
+
+```{r}
+reg <- "([^A-Za-z\\d#@']+|'[^A-Za-z\\d#@]+)"
+
+df_words <- df %>%
+    unnest_tokens(word, Lyrics, token = "regex", pattern = reg, collapse = TRUE) 
+
+df_words_unique <- df_words %>%
+  group_by(Artists, Name, Peak.position, Weeks.on.chart, Date, Genre, Writing.Credits, Songwriter) %>% 
+  count(word) %>%
+  ungroup() %>%
+  group_by(Artists, Name, word, n, Songwriter, Writing.Credits, Genre) %>%
+  summarize_at(vars(Peak.position, Weeks.on.chart), funs(min(., na.rm = TRUE), max(., na.rm = TRUE))) %>% ungroup() %>%
+  select(-Weeks.on.chart_min, -Peak.position_max)
+
+```
+
+# Some functions for cleaning and filtering.
+
+* Artists need to be separated by commas.  
+* Words with triple and beyond letters should count the same ("aaah" -> "aah")
+* Words with a contraction should drop the contraction ("bitch'll" -> "bitch")
+* No punctuation in words
+* Words in SnowballC's dictionary only
+
+```{r}
+
+load(system.file("words", "english.RData", package = "SnowballC"))
+
+each_song <- df_words_unique %>% mutate(
+        word = gsub("([A-z])\\1{2,}", '\\1\\1', word), 
+        word = gsub("([A-z])'[A-z]+", '\\1', word),
+        word = gsub("[^A-z]", '', word),
+        word = gsub("\\s+", "", word)
+      ) %>%
+    mutate(
+      Artists = str_to_lower(gsub('([A-z])([A-Z][a-z])|([a-z])([A-Z])', '\\1, \\2', Artists)),
+      Writing.Credits = str_to_lower(Writing.Credits),
+      Contributors = str_split(str_to_lower(paste(Artists, Writing.Credits, sep = ", ")), ", ")
+    )
+  
+
+each_song$Contributors = sapply(each_song$Contributors, function(x) toString(unique(unlist(x))))
+each_song$Contributors = gsub("\n", "", each_song$Contributors, fixed = TRUE)
+
+```
+
+# Looking at word rarity and complexity
+
+```{r}
+all_words <- unique(each_song$word)
+
+num_songs <- table(each_song$word)
+
+word_rarity <- -log(num_songs/max(num_songs))
+word_length <- sapply(all_words, str_length)
+
+each_song_once <- each_song %>% mutate(
+  rarity = word_rarity[word],
+  word_len = word_length[word]
+) %>% na.omit() %>%
+  group_by(Name, Artists, Songwriter) %>% 
+  summarise_at(vars(rarity, word_len), funs(max) )
+
+```
+
+
+
+
+Word diversity of songs...
+
+```{r}
+
+unique_words <- each_song %>% group_by(Name, Artists) %>% count()
+
+```
+
+#tf-idf complexity
+
+```{r}
+idf <- log(nrow(df) / num_songs)
+
+tf_idf_score <- each_song %>%
+  mutate(wordtfidf = as.numeric(n * idf[word])) %>%
+  group_by(Artists, Name) %>%
+  summarize_at(vars(wordtfidf), sum, na.rm = TRUE) %>% 
+  left_join(unique_words) %>%
+  mutate(
+    tf_idf_complexity = wordtfidf / nn
+  )
+
+```
+
+Song diversity, songwriter or not
+
+```{r}
+song_complexity <- each_song %>%  mutate(
+  word_length = str_length(word),
+  word_rare = word_rarity[word],
+  is_profanity = word %in% c("fuck", "shit", "bitch")
+  ) %>% group_by(Name, Artists, Songwriter) %>% 
+  summarize(
+     Total_Words = sum(n),
+     Unique_Words = length(n),
+     diversity = Unique_Words/Total_Words,
+     mean_word_rarity = mean(word_rare, na.rm = TRUE),
+     median_word_rarity = median(word_rare, na.rm = TRUE),
+     mean_word_length = mean(word_length, na.rm = TRUE),
+     median_word_length = median(word_length, na.rm = TRUE),
+     num_profanity = sum(is_profanity)
+) %>%
+  left_join(tf_idf_score)
+
+write.csv(song_complexity, paste0(desktop, "//Song_Complexity.csv"))
+```
+
+
+Contributor-focused, better version
+
+```{r}
+
+contrib_info <- each_song %>%
+  filter(word != "") %>%
+    unnest_tokens(Contributor, Contributors, token = "regex", pattern = cont_regex) %>% 
+  distinct(Artists, Name, Contributor) %>%
+  mutate(
+    Contributor = gsub("\n", "", Contributor, fixed = TRUE)
+  ) %>% 
+  left_join(song_complexity)
+
+```
+
+
+
