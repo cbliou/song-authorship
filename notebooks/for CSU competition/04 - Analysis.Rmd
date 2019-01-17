@@ -208,7 +208,7 @@ Key takeaways:
 
 For sentiments, we used the (NRC Emotion Lexicon)[https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm]. We run a Poisson test on each sentiment between robotic and non-robotic songs. The 95% confidence intervals are plotted below:
 
-```{r, include = FALSE, fig.width = 8, fig.height = 6}
+```{r, include = TRUE, fig.width = 8, fig.height = 6}
 num_words_to_filter = 5
 
 nrc <- sentiments %>%
@@ -238,6 +238,8 @@ sentiment_diff <- by_source_sentiment %>%
     mutate(sentiment = reorder(sentiment, estimate),
            subset = "All genres")
 
+#apply(sentiment_diff, 1, FUN=poisson.test, x = sentiment_diff["words"], T = sentiment_diff["total_words"])
+
 # plot
 sentiment_diff  %>%
     ggplot(aes(sentiment, estimate)) + 
@@ -255,7 +257,7 @@ In general, non-Robotic songs utilize less words with sentiments relating to joy
 
 The sentiment trend described above holds for the Pop genre:
 
-```{r, include = FALSE, fig.width = 8, fig.height = 6}
+```{r, include = TRUE, fig.width = 8, fig.height = 6}
 popdf <- unique_df_words %>% 
     filter(str_detect(Genre, regex("pop", ignore_case = TRUE)))
 

@@ -8,17 +8,17 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 
-install.packages("tidytext")
-install.packages("dplyr")
-install.packages("ggplot2")
-install.packages("tm")
-install.packages("topicmodels")
-install.packages("broom")
-install.packages("caret")
-install.packages("broom")
-install.packages("randomForest")
-install.packages("e1071")
-install.packages("tidyverse")
+#install.packages("tidytext")
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("tm")
+#install.packages("topicmodels")
+#install.packages("broom")
+#install.packages("caret")
+#install.packages("broom")
+#install.packages("randomForest")
+#install.packages("e1071")
+#install.packages("tidyverse")
 
 require(tidyverse)
 require(tm)
@@ -68,7 +68,7 @@ load(system.file("words", "english.RData", package = "SnowballC"))
 
 each_song <- df_words_unique %>% mutate(
         word = gsub("([A-z])\\1{2,}", '\\1\\1', word), 
-        word = gsub("([A-z])'[A-z]+", '\\1', word),
+        word = gsub("([A-z])'[A-z]+", '\\1', word), #removes contractions. Debatable.
         word = gsub("[^A-z]", '', word),
         word = gsub("\\s+", "", word)
       ) %>%
@@ -106,7 +106,7 @@ each_song_once <- each_song %>% mutate(
 
 
 
-Word diversity of songs...
+# Word diversity of songs...
 
 ```{r}
 
@@ -132,11 +132,12 @@ tf_idf_score <- each_song %>%
 
 Song diversity, songwriter or not
 
+
 ```{r}
 song_complexity <- each_song %>%  mutate(
   word_length = str_length(word),
   word_rare = word_rarity[word],
-  is_profanity = word %in% c("fuck", "shit", "bitch")
+  is_profanity = str_detect(word, regex("fuck|shit|bitch|nigga", ignore_case = TRUE))#word %in% c("fuck", "shit", " bitch", " nigga")
   ) %>% group_by(Name, Artists, Songwriter) %>% 
   summarize(
      Total_Words = sum(n),
@@ -146,7 +147,9 @@ song_complexity <- each_song %>%  mutate(
      median_word_rarity = median(word_rare, na.rm = TRUE),
      mean_word_length = mean(word_length, na.rm = TRUE),
      median_word_length = median(word_length, na.rm = TRUE),
-     num_profanity = sum(is_profanity)
+     num_profanity = sum(is_profanity),
+     tot_profanity = sum(ifelse(is_profanity == TRUE, n, 0)),
+     profanity_ratio = tot_profanity / Total_Words
 ) %>%
   left_join(tf_idf_score)
 
@@ -158,14 +161,14 @@ Contributor-focused, better version
 
 ```{r}
 
-contrib_info <- each_song %>%
-  filter(word != "") %>%
-    unnest_tokens(Contributor, Contributors, token = "regex", pattern = cont_regex) %>% 
-  distinct(Artists, Name, Contributor) %>%
-  mutate(
-    Contributor = gsub("\n", "", Contributor, fixed = TRUE)
-  ) %>% 
-  left_join(song_complexity)
+#contrib_info <- each_song %>%
+#  filter(word != "") %>%
+#    unnest_tokens(Contributor, Contributors, token = "regex", pattern = cont_regex) %>% 
+#  distinct(Artists, Name, Contributor) %>%
+#  mutate(
+#    Contributor = gsub("\n", "", Contributor, fixed = TRUE)
+#  ) %>% 
+#  left_join(song_complexity)
 
 ```
 

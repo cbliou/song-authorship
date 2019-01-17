@@ -5,8 +5,8 @@ output: html_notebook
 ---
 
 ```{r}
-install.packages("tidyverse")
-install.packages("tidytext")
+#install.packages("tidyverse")
+#install.packages("tidytext")
 
 library(magrittr)
 library(tidyverse)
@@ -39,7 +39,7 @@ write.csv(final_df, file = "..\\..\\data\\Weekly_data_top_week.csv")
 
 * Artists need to be separated by commas.  
 * Words with triple and beyond letters should count the same ("aaah" -> "aah")
-* Words with a contraction should drop the contraction ("bitch'll" -> "bitch")
+[comment]: # (* Words with a contraction should drop the contraction ("bitch'll" -> "bitch"))
 * No punctuation in words
 * Words in SnowballC's dictionary only.
 
@@ -52,7 +52,7 @@ df_words <- final_df %>%
   unnest_tokens(word, Lyrics, token = "regex", pattern = reg, collapse = TRUE) %>% 
   mutate(
         word = gsub("([A-z])\\1{2,}", '\\1\\1', word), # ayyyy -> ayy
-        word = gsub("([A-z])'[A-z]+", '\\1', word),
+        word = gsub("([A-z])'[A-z]+", '\\1', word), # removes contractions. Debatable.
         word = gsub("[^A-z]", '', word)
   ) %>%
   mutate(
@@ -61,10 +61,16 @@ df_words <- final_df %>%
   ) %>%
   filter(!word %in% stop_words$word, str_detect(word, "[a-z]"))
 
-unique_df_words <- df_words %>% distinct(Name, Artists, word, .keep_all = TRUE)
+unique_df_words <- df_words %>% distinct(Name, Artists, ID, word, .keep_all = TRUE)
 
 write.csv(df_words, file = "..\\..\\data\\Weekly_data_tokenized.csv")
 
 write.csv(unique_df_words, "..\\..\\data\\Weekly_data_tokenized_unique.csv")
+
+```
+
+```{r}
+head(final_df)
+final_df[final_df$Name == "Word Crimes",]
 ```
 
