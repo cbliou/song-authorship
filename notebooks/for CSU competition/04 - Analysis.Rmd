@@ -79,7 +79,6 @@ We first define a song as "Robotic" if the song is co-written by one of the song
 
 Our primary research question includes determining linguistic features of lyrics that best differentiate Robotic songs from original songs. Our second research question involves finding differences between Robotic and original songs in general, including lyrical complexity and ranking data.
 
-
 # Approach
 
 ## Data collection
