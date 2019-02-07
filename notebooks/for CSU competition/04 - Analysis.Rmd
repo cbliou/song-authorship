@@ -91,7 +91,7 @@ Stop words were removed in the exploratory and predictive analysis.
 ```{r, include=FALSE}
 set.seed(1)
 num_songs_present <- 5
-num_words_to_filter <- 5
+num_words_to_filter <- 0
 
 # one entry for each song-word
 each_song <- unique_df_words %>%
@@ -112,8 +112,10 @@ indices <- sample(word_count_matrix$dimnames$Docs)
 dtm.train <- word_count_matrix[indices[1:(nrow(word_count_matrix)*0.8)],]
 dtm.test <- word_count_matrix[indices[(nrow(word_count_matrix)*0.8+1):nrow(word_count_matrix)],]
 
-df.train <- df[df$ID %in% indices[1:(nrow(word_count_matrix)*0.8)], ]
-df.test <- df[df$ID %in% indices[(nrow(word_count_matrix)*0.8+1):nrow(word_count_matrix)], ]
+#df.train <- df[df$ID %in% indices[1:(nrow(word_count_matrix)*0.8)], ]
+#df.test <- df[df$ID %in% indices[(nrow(word_count_matrix)*0.8+1):nrow(word_count_matrix)], ]
+df.train <- df[match(indices[1:(nrow(word_count_matrix)*0.8)], df$ID), ]
+df.test <- df[match(indices[(nrow(word_count_matrix)*0.8+1):nrow(word_count_matrix)], df$ID), ]
 df.train.lab <- as.factor(df.train$Songwriter)
 df.test.lab <- as.factor(df.test$Songwriter)
 ```
