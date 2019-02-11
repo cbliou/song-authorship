@@ -1,0 +1,13 @@
+base
+purrr
+magrittr
+tidyr
+tidytext
+dplyr
+stringr
+ggplot2
+NLP
+tm
+topicmodels
+broom
+bindrcpp
