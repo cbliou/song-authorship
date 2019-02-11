@@ -5,9 +5,9 @@ from collections import Counter
 
 class CDFClassifier(object):
  
-    def __init__(self, smooth = 2, compare = "diff"):
+    def __init__(self, alpha = 2, compare = "diff"):
         
-        self.smooth = smooth
+        self.alpha = alpha
         self.compare = compare
         self.distributions = None
         self.cdfs = None
@@ -71,9 +71,9 @@ class CDFClassifier(object):
         Get ranks based on empirical CDF.
         """
         dist = sorted(dist.items(), key = lambda x: x[1], reverse = True)
-        return [cdf[x[0]] if x[0] in cdf else len(cdf) / self.smooth for x in dist]
+        return [cdf[x[0]] if x[0] in cdf else len(cdf) / self.alpha for x in dist]
     
-    def create_training_data(self, df, classes):
+    def create_test_data(self, df, classes):
         """
         Create test data CDF's. Assumes data is in tidy format.
         
@@ -125,7 +125,7 @@ class CDFClassifier(object):
         """     
         
         predicted = []
-        self.create_training_data(df, classes)
+        self.create_test_data(df, classes)
         
         for example in self.test_X:
             predicted.append(self.classify(example))
