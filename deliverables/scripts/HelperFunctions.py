@@ -1,5 +1,75 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import re
+
+from collections import Counter
+from sklearn.metrics import confusion_matrix
+
+
+def grid_search_nonparametric(x, y, num, clf, train, test, classes, compare, useprior):
+    
+    grid = {}
+    grid2 = {}
+
+    for n in np.linspace(x, y, num)[1:]:
+        tclf = clf(alpha = float(n), compare = compare, useprior = useprior)
+        tclf.fit(train, classes)
+        grid.update({n: confusion_matrix(tclf.predict(test, classes), tclf.test_Y)})
+        grid2.update({n: np.diag(grid[n]).sum() / grid[n].sum()})
+    
+    best = sorted(grid2.items(), key = lambda x: x[1], reverse = True)[0]
+    print("Best accuracy:", best[1])
+    print("Parameter", best[0])
+
+    plt.plot([i for i in grid2], [grid2[i] for i in grid2])
+    
+    return grid
+
+def grid_search_cdf(x, y, num, clf, train, test, classes, compare):
+    
+    grid = {}
+    grid2 = {}
+
+    for n in np.linspace(x, y, num):
+        tclf = clf(alpha = n, compare = compare)
+        tclf.fit(train, classes)
+        grid.update({n: confusion_matrix(tclf.predict(test, classes), tclf.test_Y)})
+        grid2.update({n: np.diag(grid[n]).sum() / grid[n].sum()})
+        
+    best = sorted(grid2.items(), key = lambda x: x[1], reverse = True)[0]
+    print("Best accuracy:", best[1])
+    print("Parameter", best[0])
+
+    plt.plot([i for i in grid2], [grid2[i] for i in grid2])
+    
+    return grid
+
+def create_genre(row, genre):
+    if re.search(genre, row["Genre"], flags = re.I) != None:
+        return 1
+    else:
+        return 0
+    
+def convert_genre(y):
+    """
+    Convert test vector into numbers.
+    """
+    y = np.array(y)
+    counts = Counter(y)
+    itor = 0
+    for genre in counts:
+        y[y == genre] = itor
+        itor += 1
+    return y.astype(int)
+
+def calculate_gini_index(vocabulary):
+    index = {}
+    
+    for word in vocabulary.index:
+        index.update({word: sum((vocabulary.loc[word] / vocabulary.loc[word].sum()) ** 2)})
+        
+    return index
 
 def build_vocabulary(df, vocab = {}):
     """
@@ -30,7 +100,7 @@ def build_word_vector(vocab, document):
     return vec
 
 
-def prepare_data(train, test):
+def prepare_binary_data(train, test):
 
     train_words = train[["ID", "word"]]
     test_words = test[["ID", "word"]]
