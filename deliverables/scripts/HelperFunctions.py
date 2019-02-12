@@ -99,6 +99,71 @@ def build_word_vector(vocab, document):
             vec[vocab[word]] += 1
     return vec
 
+def prepare_multigenre_data(train, test):
+    
+    train_words = train[["ID", "word"]]
+    test_words = test[["ID", "word"]]
+
+    vocab = build_vocabulary(train_words)
+    vocab = build_vocabulary(test_words, vocab)
+    
+    X_train, y_train, X_test, y_test = [], [], [], []
+
+    poptrain = train[train["Pop"] == 1]
+    raptrain = train[train["Rap"] == 1]
+    rocktrain = train[train["Rock"] == 1]
+    countrytrain = train[train["Country"] == 1]
+
+    poptest = test[test["Pop"] == 1]
+    raptest = test[test["Rap"] == 1]
+    rocktest = test[test["Rock"] == 1]
+    countrytest = test[test["Country"] == 1]
+
+    # build training set
+
+    for doc in poptrain.ID.unique():
+        tmp = poptrain[poptrain.ID == doc]
+        X_train.append(build_word_vector(vocab, tmp))
+        y_train.append("pop")
+
+    for doc in raptrain.ID.unique():
+        tmp = raptrain[raptrain.ID == doc]
+        X_train.append(build_word_vector(vocab, tmp))
+        y_train.append("rap")  
+
+    for doc in rocktrain.ID.unique():
+        tmp = rocktrain[rocktrain.ID == doc]
+        X_train.append(build_word_vector(vocab, tmp))
+        y_train.append("rock")
+
+    for doc in countrytrain.ID.unique():
+        tmp = countrytrain[countrytrain.ID == doc]
+        X_train.append(build_word_vector(vocab, tmp))
+        y_train.append("country")  
+
+    # build testing set
+
+    for doc in poptest.ID.unique():
+        tmp = poptest[poptest.ID == doc]
+        X_test.append(build_word_vector(vocab, tmp))
+        y_test.append("pop")
+
+    for doc in raptest.ID.unique():
+        tmp = raptest[raptest.ID == doc]
+        X_test.append(build_word_vector(vocab, tmp))
+        y_test.append("rap")
+
+    for doc in rocktest.ID.unique():
+        tmp = rocktest[rocktest.ID == doc]
+        X_test.append(build_word_vector(vocab, tmp))
+        y_test.append("rock")
+
+    for doc in countrytest.ID.unique():
+        tmp = countrytest[countrytest.ID == doc]
+        X_test.append(build_word_vector(vocab, tmp))
+        y_test.append("country")
+        
+    return X_train, y_train, X_test, y_test
 
 def prepare_binary_data(train, test):
 
