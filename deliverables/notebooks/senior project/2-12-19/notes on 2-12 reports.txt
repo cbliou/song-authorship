@@ -1,0 +1,30 @@
+- During validation, make sure you only classify each example as one label
+ - baseline idea: identify any one of the genre's = correct
+ - complex idea: take a distance between labels and predicted accuracy vector
+- moreover, find out which features discriminate the songs well
+    - find some metric to talk about which words are better 
+- for four categories (genre)
+ - break down each % of category
+- talk about random assignment - no information rate
+
+
+
+if i use python:
+1. can't proofread as well
+2. visualzations r key in $R$
+
+big key ideas still need to address:
+- overlap
+- model interpretation (how are the songs being discriminated???)
+
+
+- confirm that if i am selected to represent cal poly, can i resubmit a paper?
+
+what we have done
+- genre as a predictor - logistic regression on pop and rap
+- genre as a response - predict weekly ranks, etc
+- unsupervised clustering - lda
+- supervised clustering - current nb (classification methods)
+
+- for gini index : only use pop and rap not the genre combinations
+- also, remove words based on # of times it appears otherwise we are overfitting on one word example.
