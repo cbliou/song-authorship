@@ -16,13 +16,18 @@ if i use python:
 big key ideas still need to address:
 - overlap
 - model interpretation (how are the songs being discriminated???)
+	- ideas:
+		- for nb look at coefficients
+		- for RF look at first couple of nodes
+		- for my own methods take distance in distributions and find maximally different words
 
 
 - confirm that if i am selected to represent cal poly, can i resubmit a paper?
 
 what we have done
-- genre as a predictor - logistic regression on pop and rap
-- genre as a response - predict weekly ranks, etc
+
+- genre as a predictor - predict weekly ranks, peak position
+- genre as a response - logistic regression on pop and rap
 - unsupervised clustering - lda
 - supervised clustering - current nb (classification methods)
 
